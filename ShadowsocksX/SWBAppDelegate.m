@@ -119,6 +119,7 @@ static SWBAppDelegate *appDelegate;
     userRulePath = [NSString stringWithFormat:@"%@/%@", configPath, @"user-rule.txt"];
     [self monitorPAC:configPath];
     appDelegate = self;
+    [self xh_init];
 }
 
 - (NSData *)PACData {
@@ -151,6 +152,77 @@ static SWBAppDelegate *appDelegate;
     }
     [ProfileManager saveConfiguration:configuration];
     [self updateServersMenu];
+}
+
+- (void)xh_newconfig:(NSString *)server  port:(NSString*)port method:(NSString*)method pwd:(NSString*)pwd
+{
+    Configuration *configuration = [ProfileManager configuration];
+    configuration.current = 0;
+    
+    NSInteger i = [configuration.profiles count];
+    if(i == 0){
+        Profile *profile = [[Profile alloc] init];
+        profile.server = [NSString stringWithString:server];
+        profile.serverPort = [port integerValue];
+        profile.method = @"aes-256-cfb";//hard code
+        profile.password = [NSString stringWithString: pwd];
+        [((NSMutableArray *) configuration.profiles) addObject:profile];
+    } else {
+        Profile *profile = [configuration.profiles objectAtIndex:0];
+        profile.server = [NSString stringWithString:server];
+        profile.serverPort = [port integerValue];
+        profile.method = @"aes-256-cfb";//hard code
+        profile.password = [NSString stringWithString: pwd];
+    }
+    [ProfileManager saveConfiguration:configuration];
+}
+
+- (NSString *)for_val:(NSString*)data pattern: (NSString*)patten
+{
+    NSError *err;
+
+    NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern: patten
+                                                                           options: NSRegularExpressionCaseInsensitive
+                                                                             error: &err];
+    NSRange chk = [regex rangeOfFirstMatchInString: data
+                                           options: 0
+                                             range: NSMakeRange(0,[data length])];
+    
+    NSString *ser = [data substringWithRange:chk];
+    return ser;
+}
+
+- (void)xh_get:(NSString*)data
+{
+    NSString *serp =@"(?<=服务器地址:).*(?=<)";
+    NSString *portp =@"(?<=端口:).*(?=<)";
+    NSString *pwdp =@"(?<=密码:).*(?=<)";
+    
+    NSString *ser, *port,*pwd;
+    
+    ser = [self for_val:data pattern:serp];
+    port = [self for_val:data pattern:portp];
+    pwd = [self for_val:data pattern:pwdp];
+    
+    NSLog(@"\n ser is *%@*, port is *%@*, pwd is *%@*",ser,port,pwd );
+    [self xh_newconfig:ser port:port method:@"" pwd:pwd];
+    
+}
+- (void)xh_init
+{
+    NSURL *url = [NSURL URLWithString:@"http://www.ishadowsocks.com"];
+    NSURLRequest *request = [NSURLRequest requestWithURL:url];
+    
+    AFHTTPRequestOperation *operation = [[AFHTTPRequestOperation alloc]initWithRequest:request];
+    [operation setCompletionBlockWithSuccess:^(AFHTTPRequestOperation *operation, id responseObject) {
+        NSString *html = operation.responseString;
+        [self xh_get:html];
+    }failure:^(AFHTTPRequestOperation *operation, NSError *error) {
+        NSLog(@"发生错误！%@",error);
+    }];
+    NSOperationQueue *queue = [[NSOperationQueue alloc] init];
+    [queue addOperation:operation];
+    
 }
 
 - (void)updateServersMenu {
